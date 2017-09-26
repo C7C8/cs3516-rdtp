@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "project2.h"
  
 /* ***************************************************************************
@@ -35,6 +36,12 @@
  * in-order, and correctly, to the receiving side upper layer.
  */
 void A_output(struct msg message) {
+	struct pkt packet;
+	packet.acknum = 0;
+	packet.checksum = 0;
+	strcpy(packet.payload, message.data);
+	packet.seqnum = 0;
+	tolayer3(AEntity, packet);
 }
 
 /*
@@ -52,7 +59,6 @@ void B_output(struct msg message)  {
  * packet is the (possibly corrupted) packet sent from the B-side.
  */
 void A_input(struct pkt packet) {
-
 }
 
 /*
@@ -82,6 +88,9 @@ void A_init() {
  * packet is the (possibly corrupted) packet sent from the A-side.
  */
 void B_input(struct pkt packet) {
+	struct msg message;
+	strcpy(message.data, packet.payload);
+	tolayer5(BEntity, message);
 }
 
 /*
