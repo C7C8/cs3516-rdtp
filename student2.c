@@ -7,10 +7,7 @@
 //Cheat at checksumming using zlib, because rolling your own crypto/hashing stuff is awful
 #define checksum(packet) (int)crc32(0, (const Bytef*)&packet, sizeof(struct pkt))
 #define corrupt(packet, cksum) (cksum != checksum(packet))
-
-//The preprocessor sure is something, isn't it?
-#define waitprop(x) (x == WAIT0 ? 0 : 1)
-#define ackprop(x) (x == ACK0? 0 : 1)
+#define ackprop(x) (x == ACK0? 0 : 1) //i am lazy
 #define TIME_DELAY 6
  
 /* ***************************************************************************
@@ -47,21 +44,21 @@
  */
 
 //Global state variables, because we need to save state between function calls
-enum S_STATE {WAIT0, ACK0, WAIT1, ACK1} SENDER_STATE = WAIT0;
-enum R_STATE {WAIT0, WAIT1} RECEIVER_STATE = R_STATE::WAIT0;
+enum S_STATE {SWAIT0, SACK0, SWAIT1, SACK1} SENDER_STATE = SWAIT0;
+enum R_STATE {RWAIT0, RWAIT1} RECEIVER_STATE = RWAIT0;
 struct pkt lastPacket;
 
 void A_output(struct msg message) {
-	if (SENDER_STATE == WAIT0 || SENDER_STATE == WAIT1) {
+	if (SENDER_STATE == SWAIT0 || SENDER_STATE == SWAIT1) {
 		struct pkt packet;
 		memset(&packet, 0, sizeof(packet));
 		packet.acknum = 0;
-		packet.seqnum = waitprop(SENDER_STATE);
+		packet.seqnum = (SENDER_STATE == SWAIT0 ? 0 : 1);
 		strcpy(packet.payload, message.data);
 		packet.checksum = checksum(packet);
 		lastPacket = packet;
 		tolayer3(AEntity, packet);
-		SENDER_STATE = (SENDER_STATE == WAIT0 ? ACK0 : ACK1);
+		SENDER_STATE = (SENDER_STATE == RWAIT0 ? SACK0 : SACK1);
 		startTimer(AEntity, TIME_DELAY);
 	}
 	else
@@ -83,7 +80,7 @@ void B_output(struct msg message)  {
  * packet is the (possibly corrupted) packet sent from the B-side.
  */
 void A_input(struct pkt packet) {
-	if (SENDER_STATE == ACK0 || SENDER_STATE == ACK1){
+	if (SENDER_STATE == SACK0 || SENDER_STATE == SACK1){
 		//This packet *should* be an ACK
 		if (!packet.acknum) {
 			fprintf(stderr, "Sender received a packet that wasn't an ACK!\n");
@@ -100,7 +97,7 @@ void A_input(struct pkt packet) {
 		}
 
 		//Verify that we have the right ACK number, which is stored in the sequence number. This is probably a bad idea.
-		if (packet.seqnum != ackprop(SENDER_STATE)){
+		if (packet.seqnum != (SENDER_STATE == SACK0 ? 0 : 1)){
 			fprintf(stderr, "Sender received an out-of-order ACK!\n");
 			return;
 		}
@@ -108,7 +105,7 @@ void A_input(struct pkt packet) {
 		//Now we've confirmed that we've got an ACK, it had the right number, and the packet wasn't corrupted. Stop
 		//the timer and advance to the next state, whatever that might be.
 		stopTimer(AEntity);
-		SENDER_STATE = (SENDER_STATE == ACK0 ? WAIT1 : WAIT0);
+		SENDER_STATE = (SENDER_STATE == SACK0 ? SWAIT1 : SWAIT0);
 	}
 	else
 		fprintf(stderr, "Bad call to A_input!\n");
@@ -152,7 +149,7 @@ void B_input(struct pkt packet) {
 		fprintf(stderr, "Receiver got a corrupt packet!\n");
 		return;
 	}
-	if (packet.seqnum != waitprop(RECEIVER_STATE)){
+	if (packet.seqnum != (RECEIVER_STATE == RWAIT0 ? 0 : 1)){
 		fprintf(stderr, "Receiver got the wrong sequence number packet!\n");
 		return;
 	}
@@ -164,10 +161,10 @@ void B_input(struct pkt packet) {
 	struct pkt ack;
 	memset(&ack, 0, sizeof(ack));
 	ack.acknum = 1;
-	ack.seqnum = waitprop(RECEIVER_STATE);
+	ack.seqnum = (RECEIVER_STATE == SACK0 ? 0 : 1);
 	ack.checksum = checksum(ack);
 	tolayer3(BEntity, ack);
-	RECEIVER_STATE = (RECEIVER_STATE == R_STATE::WAIT0 ? R_STATE::WAIT1 : R_STATE::WAIT0);
+	RECEIVER_STATE = (RECEIVER_STATE == RWAIT0 ? RWAIT1 : RWAIT0);
 
 }
 
