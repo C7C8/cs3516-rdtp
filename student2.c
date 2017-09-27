@@ -8,7 +8,7 @@
 #define checksum(packet) (int)crc32(0, (const Bytef*)&packet, sizeof(struct pkt))
 #define corrupt(packet, cksum) (cksum != checksum(packet))
 #define ackprop(x) (x == ACK0? 0 : 1) //i am lazy
-#define TIME_DELAY 6
+#define TIME_DELAY 1000
  
 /* ***************************************************************************
  ALTERNATING BIT AND GO-BACK-N NETWORK EMULATOR: VERSION 1.1  J.F.Kurose
@@ -161,7 +161,7 @@ void B_input(struct pkt packet) {
 	struct pkt ack;
 	memset(&ack, 0, sizeof(ack));
 	ack.acknum = 1;
-	ack.seqnum = (RECEIVER_STATE == SACK0 ? 0 : 1);
+	ack.seqnum = (RECEIVER_STATE == RWAIT0 ? 0 : 1);
 	ack.checksum = checksum(ack);
 	tolayer3(BEntity, ack);
 	RECEIVER_STATE = (RECEIVER_STATE == RWAIT0 ? RWAIT1 : RWAIT0);
