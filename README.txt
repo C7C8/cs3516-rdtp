@@ -7,7 +7,7 @@ on both ccc.wpi.edu and rambo.wpi.edu. zlib is only included so that I may use t
 checksum function for error detection that zlib helpfully provides.
 
 Ultimately, due to time concerns, the optional GBN protocol was not implemented. However, I have
-written a seemingly flawless implementation of RDT 3.0, to the point that it can handle 1,000,000
+written a seemingly robust implementation of RDT 3.0, to the point that it can handle 1,000,000
 packets with 0.9 probability for all network attributes.
 
 Since the output of the program for 50,000 packets is extensive, I've provided the required output
