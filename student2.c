@@ -106,7 +106,7 @@ void A_sendNextMsg(){
 		packet.checksum = checksum(packet);
 		lastPacket = packet;
 		tolayer3(AEntity, packet);
-		SENDER_STATE = (SENDER_STATE == RWAIT0 ? SACK0 : SACK1);
+		SENDER_STATE = (SENDER_STATE == SWAIT0 ? SACK0 : SACK1);
 		startTimer(AEntity, TIME_DELAY);
 	}
 }
