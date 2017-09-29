@@ -8,7 +8,7 @@
 #define checksum(packet) (int)crc32(0, (const Bytef*)&packet, sizeof(struct pkt))
 #define corrupt(packet, cksum) (cksum != checksum(packet))
 #define ackprop(x) (x == ACK0? 0 : 1) //i am lazy
-#define TIME_DELAY 10000
+#define TIME_DELAY 1000
  
 /* ***************************************************************************
  ALTERNATING BIT AND GO-BACK-N NETWORK EMULATOR: VERSION 1.1  J.F.Kurose
@@ -98,10 +98,7 @@ void pushMsg(struct msg packet){
  * Process the next packet on the queue.
  */
 void A_sendNextMsg(){
-	if (queueSize == 0){
-		fprintf(stderr, "Unexpected call to A_sendNextMsg(), there's no packet to transmit here!\n");
-	}
-	else if (SENDER_STATE == SWAIT0 || SENDER_STATE == SWAIT1) { //Idiot check, because the person who wrote this code is an idiot
+	if ((SENDER_STATE == SWAIT0 || SENDER_STATE == SWAIT1) && queueSize > 0) { //Idiot check, because the person who wrote this code is an idiot
 		struct pkt packet;
 		memset(&packet, 0, sizeof(packet));
 		packet.acknum = 0;
@@ -113,8 +110,6 @@ void A_sendNextMsg(){
 		SENDER_STATE = (SENDER_STATE == RWAIT0 ? SACK0 : SACK1);
 		startTimer(AEntity, TIME_DELAY);
 	}
-	else
-		fprintf(stderr, "Delaying sending of message until later time; %d packets waiting!\n", queueSize);
 }
 
 void A_output(struct msg message) {
@@ -140,26 +135,19 @@ void B_output(struct msg message)  {
 void A_input(struct pkt packet) {
 	if (SENDER_STATE == SACK0 || SENDER_STATE == SACK1){
 		//This packet *should* be an ACK
-		if (!packet.acknum) {
-			fprintf(stderr, "Sender received a packet that wasn't an ACK!\n");
+		if (!packet.acknum)
 			return;
-		}
 
 		//Verify the checksum matches. The original checksum was calculated with packet.checksum = 0, so we have to
 		//do the same trick here.
 		const int checksum = packet.checksum;
 		packet.checksum = 0;
-		if (corrupt(packet, checksum)){
-			fprintf(stderr, "Sender received a corrupt ACK packet!\n");
-
+		if (corrupt(packet, checksum))
 			return;
-		}
 
 		//Verify that we have the right ACK number, which is stored in the sequence number. This is probably a bad idea.
-		if (packet.seqnum != (SENDER_STATE == SACK0 ? 0 : 1)){
-			fprintf(stderr, "Sender received an out-of-order ACK!\n");
+		if (packet.seqnum != (SENDER_STATE == SACK0 ? 0 : 1))
 			return;
-		}
 
 		//Now we've confirmed that we've got an ACK, it had the right number, and the packet wasn't corrupted. Stop
 		//the timer and advance to the next state, whatever that might be.
@@ -168,8 +156,6 @@ void A_input(struct pkt packet) {
 		if (queueSize > 0)
 			A_sendNextMsg();
 	}
-	else
-		fprintf(stderr, "Bad call to A_input!\n");
 }
 
 /*
@@ -180,7 +166,6 @@ void A_input(struct pkt packet) {
  */
 void A_timerinterrupt() {
 	//Retransmit the last packet.
-	fprintf(stderr, "Sender timeout expired, resending the last packet!\n");
 	tolayer3(AEntity, lastPacket);
 	stopTimer(AEntity); //Is this needed? No idea. Do I care? Not really.
 	startTimer(AEntity, TIME_DELAY);
@@ -207,7 +192,6 @@ void B_input(struct pkt packet) {
 	const int checksum = packet.checksum;
 	packet.checksum = 0;
 	if (corrupt(packet, checksum)){
-		fprintf(stderr, "Receiver got a corrupt packet!\n");
 		struct pkt badAck;
 		memset(&badAck, 0, sizeof(struct pkt));
 		badAck.acknum = 1;
@@ -217,7 +201,6 @@ void B_input(struct pkt packet) {
 		return;
 	}
 	if (packet.seqnum != (RECEIVER_STATE == RWAIT0 ? 0 : 1)){
-		fprintf(stderr, "Receiver got the wrong sequence number packet!\n");
 		struct pkt badAck;
 		memset(&badAck, 0, sizeof(struct pkt));
 		badAck.acknum = 1;
