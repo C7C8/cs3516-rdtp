@@ -57,6 +57,7 @@ pktChain* queueFront = NULL;
 pktChain* queueBack = NULL;
 unsigned int queueSize = 0;
 
+//Simple linked-list based queue stuff. This one just gets the first message on the queue.
 struct msg getNextMsg(){
 	struct msg ret;
 	if (queueFront == NULL){
@@ -74,6 +75,7 @@ struct msg getNextMsg(){
 	return ret;
 }
 
+//Push a message to the back of the queue.
 void pushMsg(struct msg packet){
 	pktChain* nLink = (pktChain*)malloc(sizeof(pktChain));
 	memset(nLink, 0, sizeof(pktChain));
@@ -97,6 +99,7 @@ void pushMsg(struct msg packet){
  * Process the next packet on the queue.
  */
 void A_sendNextMsg(){
+	//Construct a packet, but only if we're in a wait-for-call-from-above state.
 	if ((SENDER_STATE == SWAIT0 || SENDER_STATE == SWAIT1) && queueSize > 0) { //Idiot check, because the person who wrote this code is an idiot
 		struct pkt packet;
 		memset(&packet, 0, sizeof(packet));
@@ -112,6 +115,7 @@ void A_sendNextMsg(){
 	}
 }
 
+//Push a message to the queue, and call the send message function if we're ready to send.
 void A_output(struct msg message) {
 	pushMsg(message);
 	if (SENDER_STATE == SWAIT0 || SENDER_STATE == SWAIT1)
@@ -165,7 +169,7 @@ void A_input(struct pkt packet) {
  * and stoptimer() in the writeup for how the timer is started and stopped.
  */
 void A_timerinterrupt() {
-	//Retransmit the last packet.
+	//Retransmit the last packet upon timer expiration.
 	tolayer3(AEntity, lastPacket);
 	stopTimer(AEntity); //Is this needed? No idea. Do I care? Not really.
 	startTimer(AEntity, TIME_DELAY);
@@ -193,6 +197,7 @@ void B_input(struct pkt packet) {
 	const int checksum = packet.checksum;
 	packet.checksum = 0;
 	if (corrupt(packet, checksum) || packet.seqnum != (RECEIVER_STATE == RWAIT0 ? 0 : 1)){
+		//Because, reasons.
 		struct pkt badAck;
 		memset(&badAck, 0, sizeof(struct pkt));
 		badAck.acknum = 1;
