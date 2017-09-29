@@ -7,7 +7,6 @@
 //Cheat at checksumming using zlib, because rolling your own crypto/hashing stuff is awful
 #define checksum(packet) (int)crc32(0, (const Bytef*)&packet, sizeof(struct pkt))
 #define corrupt(packet, cksum) (cksum != checksum(packet))
-#define ackprop(x) (x == ACK0? 0 : 1) //i am lazy
 #define TIME_DELAY 1000
  
 /* ***************************************************************************
@@ -188,19 +187,11 @@ void A_init() {
  * packet is the (possibly corrupted) packet sent from the A-side.
  */
 void B_input(struct pkt packet) {
-	//Verify that the packet isn't corrupted and verify that it has the right ACK number.
+	//Verify that the packet isn't corrupted and verify that it has the right ACK number. If either of these fail,
+	//send a bad ACK packet.
 	const int checksum = packet.checksum;
 	packet.checksum = 0;
-	if (corrupt(packet, checksum)){
-		struct pkt badAck;
-		memset(&badAck, 0, sizeof(struct pkt));
-		badAck.acknum = 1;
-		badAck.seqnum = (RECEIVER_STATE == RWAIT0 ? 1 : 0);
-		badAck.checksum = checksum(badAck);
-		tolayer3(BEntity, badAck);
-		return;
-	}
-	if (packet.seqnum != (RECEIVER_STATE == RWAIT0 ? 0 : 1)){
+	if (corrupt(packet, checksum) || packet.seqnum != (RECEIVER_STATE == RWAIT0 ? 0 : 1)){
 		struct pkt badAck;
 		memset(&badAck, 0, sizeof(struct pkt));
 		badAck.acknum = 1;
