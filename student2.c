@@ -8,7 +8,7 @@
 #define checksum(packet) (int)crc32(0, (const Bytef*)&packet, sizeof(struct pkt))
 #define corrupt(packet, cksum) (cksum != checksum(packet))
 #define ackprop(x) (x == ACK0? 0 : 1) //i am lazy
-#define TIME_DELAY 1000
+#define TIME_DELAY 10000
  
 /* ***************************************************************************
  ALTERNATING BIT AND GO-BACK-N NETWORK EMULATOR: VERSION 1.1  J.F.Kurose
@@ -48,13 +48,65 @@ enum S_STATE {SWAIT0, SACK0, SWAIT1, SACK1} SENDER_STATE = SWAIT0;
 enum R_STATE {RWAIT0, RWAIT1} RECEIVER_STATE = RWAIT0;
 struct pkt lastPacket;
 
-void A_output(struct msg message) {
-	if (SENDER_STATE == SWAIT0 || SENDER_STATE == SWAIT1) {
+//Packet transmission queue stuff
+struct pktChain {
+	struct pktChain* next;
+	struct msg packet;
+};
+typedef struct pktChain pktChain;
+pktChain* queueFront = NULL;
+pktChain* queueBack = NULL;
+unsigned int queueSize = 0;
+
+struct msg getNextMsg(){
+	struct msg ret;
+	if (queueFront == NULL){
+		memset(&ret, 0, sizeof(struct pkt));
+		return ret;
+	}
+
+	ret = queueFront->packet;
+	pktChain* tmp = queueFront;
+	queueFront = queueFront->next;
+	if (queueFront == NULL)
+		queueBack = NULL;
+	free(tmp);
+	queueSize--;
+	return ret;
+}
+
+void pushMsg(struct msg packet){
+	pktChain* nLink = (pktChain*)malloc(sizeof(pktChain));
+	memset(nLink, 0, sizeof(pktChain));
+	nLink->packet = packet;
+	queueSize++;
+
+	//Empty queue; the first packet and the last packet are the same
+	if (queueBack == NULL){
+		queueFront = nLink;
+		queueBack = nLink;
+	}
+	else {
+		//Non-empty queue; point the last packet at our new packet,
+		//then set the last packet pointer to point at the new one
+		queueBack->next = nLink;
+		queueBack = nLink;
+	}
+}
+
+/*
+ * Process the next packet on the queue.
+ */
+void A_sendNextMsg(){
+	if (queueSize == 0){
+		fprintf(stderr, "Unexpected call to A_sendNextMsg(), there's no packet to transmit here!\n");
+	}
+	else if (SENDER_STATE == SWAIT0 || SENDER_STATE == SWAIT1) { //Idiot check, because the person who wrote this code is an idiot
 		struct pkt packet;
 		memset(&packet, 0, sizeof(packet));
 		packet.acknum = 0;
 		packet.seqnum = (SENDER_STATE == SWAIT0 ? 0 : 1);
-		strcpy(packet.payload, message.data);
+		strcpy(packet.payload, getNextMsg().data);
 		packet.checksum = checksum(packet);
 		lastPacket = packet;
 		tolayer3(AEntity, packet);
@@ -62,7 +114,13 @@ void A_output(struct msg message) {
 		startTimer(AEntity, TIME_DELAY);
 	}
 	else
-		fprintf(stderr, "Bad call to A_output!\n");
+		fprintf(stderr, "Delaying sending of message until later time; %d packets waiting!\n", queueSize);
+}
+
+void A_output(struct msg message) {
+	pushMsg(message);
+	if (SENDER_STATE == SWAIT0 || SENDER_STATE == SWAIT1)
+		A_sendNextMsg();
 }
 
 /*
@@ -93,6 +151,7 @@ void A_input(struct pkt packet) {
 		packet.checksum = 0;
 		if (corrupt(packet, checksum)){
 			fprintf(stderr, "Sender received a corrupt ACK packet!\n");
+
 			return;
 		}
 
@@ -106,6 +165,8 @@ void A_input(struct pkt packet) {
 		//the timer and advance to the next state, whatever that might be.
 		stopTimer(AEntity);
 		SENDER_STATE = (SENDER_STATE == SACK0 ? SWAIT1 : SWAIT0);
+		if (queueSize > 0)
+			A_sendNextMsg();
 	}
 	else
 		fprintf(stderr, "Bad call to A_input!\n");
@@ -147,10 +208,22 @@ void B_input(struct pkt packet) {
 	packet.checksum = 0;
 	if (corrupt(packet, checksum)){
 		fprintf(stderr, "Receiver got a corrupt packet!\n");
+		struct pkt badAck;
+		memset(&badAck, 0, sizeof(struct pkt));
+		badAck.acknum = 1;
+		badAck.seqnum = (RECEIVER_STATE == RWAIT0 ? 1 : 0);
+		badAck.checksum = checksum(badAck);
+		tolayer3(BEntity, badAck);
 		return;
 	}
 	if (packet.seqnum != (RECEIVER_STATE == RWAIT0 ? 0 : 1)){
 		fprintf(stderr, "Receiver got the wrong sequence number packet!\n");
+		struct pkt badAck;
+		memset(&badAck, 0, sizeof(struct pkt));
+		badAck.acknum = 1;
+		badAck.seqnum = (RECEIVER_STATE == RWAIT0 ? 1 : 0);
+		badAck.checksum = checksum(badAck);
+		tolayer3(BEntity, badAck);
 		return;
 	}
 
@@ -165,7 +238,6 @@ void B_input(struct pkt packet) {
 	ack.checksum = checksum(ack);
 	tolayer3(BEntity, ack);
 	RECEIVER_STATE = (RECEIVER_STATE == RWAIT0 ? RWAIT1 : RWAIT0);
-
 }
 
 /*
