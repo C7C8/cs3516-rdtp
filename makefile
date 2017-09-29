@@ -10,3 +10,6 @@ project2.o: project2.h project2.c
 
 student2.o: student2.c project2.h
 	gcc ${CFLAGS} -c student2.c
+
+clean:
+	rm -f *.o rdtp
