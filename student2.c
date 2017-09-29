@@ -102,7 +102,8 @@ void A_sendNextMsg(){
 		memset(&packet, 0, sizeof(packet));
 		packet.acknum = 0;
 		packet.seqnum = (SENDER_STATE == SWAIT0 ? 0 : 1);
-		strcpy(packet.payload, getNextMsg().data);
+		struct msg temp = getNextMsg(); //go away, non-lvalue array error
+		strcpy(packet.payload, temp.data);
 		packet.checksum = checksum(packet);
 		lastPacket = packet;
 		tolayer3(AEntity, packet);

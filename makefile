@@ -2,7 +2,7 @@ CFLAGS=-g -Wall -lz
 
 all: rdtp
 
-tarsubmit: rdtp output-trace-50k.txt 
+crmyers_project2_ABP.tar.gz: rdtp output-trace-50k.txt 
 	tar -cvzf crmyers_project2_ABP.tar.gz *.c *.h makefile README.txt output-trace-50k.txt
 
 rdtp: project2.o student2.o
@@ -20,4 +20,4 @@ output-trace-50k.txt: rdtp
 	./rdtp 50000 0.25 0.25 0.25 500 1 1 0 >> output-trace-50k.txt
 
 clean:
-	rm -f *.o rdtp
+	rm -f *.o rdtp crmyers_project2_ABP.tar.gz
